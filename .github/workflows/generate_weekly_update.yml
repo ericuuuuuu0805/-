@@ -1,0 +1,60 @@
+name: 週次案件アップデート下書き生成
+
+on:
+  schedule:
+    # 毎週金曜日 11:00 AM JST = 02:00 UTC
+    - cron: '0 2 * * 5'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'テスト実行（Slack通知なし）'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  generate-draft:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Python セットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 依存関係インストール
+        run: pip install -r requirements.txt
+
+      - name: 下書き生成
+        working-directory: scripts
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_PROJECTS_DB_ID: ${{ secrets.NOTION_PROJECTS_DB_ID }}
+          NOTION_MEETING_NOTES_DB_ID: ${{ secrets.NOTION_MEETING_NOTES_DB_ID }}
+          GMAIL_TOKEN_JSON: ${{ secrets.GMAIL_TOKEN_JSON }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_NOTIFY_USER_ID: ${{ secrets.SLACK_NOTIFY_USER_ID }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        run: python generate_draft.py
+
+      - name: 下書きをコミット・プッシュ
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add drafts/
+          if git diff --staged --quiet; then
+            echo "変更なし（スキップ）"
+          else
+            WEEK_DATE=$(date -u +"%Y-%m-%d" --date="TZ=Asia/Tokyo")
+            git commit -m "chore: 週次案件アップデート下書き ${WEEK_DATE}"
+            git push origin HEAD
+          fi
