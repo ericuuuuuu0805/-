@@ -187,17 +187,18 @@ Notion の案件進捗を更新してください。
 ## 過去7日間の Gmail
 {emails_text}
 
-## 指示
-- 各メールがどの案件に関連するか判断してください。
-- 関連するメールがあれば「現状」フィールドへの追記テキストを生成してください。
-- 既存の「現状」に書かれていない新規情報のみを追記してください。
-- 更新が不要な案件は含めないでください。
+## 厳守ルール
+- 既存の「現状」フィールドの内容は**絶対に消去・変更しない**。
+- 追記するのは、既存の「現状」に記載されていない**新規情報のみ**。
+- 返す「現状_追記」は追記分だけを書く（既存文を含めない）。
+  スクリプト側で「既存文 ＋ 空行 ＋ 追記」の順で結合するので、既存文の繰り返しは不要。
+- 関連するメールがない案件や、既に現状に記録済みの内容のみの案件は含めないでください。
 
 ## 出力形式（JSON のみ）
 [
   {{
     "page_id": "Notion ページ ID（ハイフンなし）",
-    "現状_追記": "【{today} 更新】\\n具体的な進捗内容",
+    "現状_追記": "【{today} 更新】\\n具体的な進捗内容（追記分のみ）",
     "関連メール件名": "件名"
   }}
 ]
@@ -225,6 +226,15 @@ JSON のみ返答してください。説明は不要です。"""
 
 # ── Notion 更新 ───────────────────────────────────────────────────────────────
 
+def _to_rich_text_blocks(text: str) -> list[dict]:
+    """Notion rich_text は1ブロック最大2000文字のため分割する。"""
+    CHUNK = 1999
+    return [
+        {"type": "text", "text": {"content": text[i: i + CHUNK]}}
+        for i in range(0, len(text), CHUNK)
+    ] or [{"type": "text", "text": {"content": ""}}]
+
+
 def apply_updates(
     notion: NotionClient, updates: list[dict], cases: list[dict], today: str
 ):
@@ -238,17 +248,21 @@ def apply_updates(
             logger.warning("案件が見つかりません: %s", pid)
             continue
 
-        existing = case["現状"]
+        # 書き込み直前に最新の現状を再取得（手動編集との競合を防ぐ）
+        live_page = notion.pages.retrieve(page_id=case["id"])
+        live_props = live_page.get("properties", {})
+        existing_blocks = live_props.get("現状", {}).get("rich_text", [])
+        existing = "".join(b.get("plain_text", "") for b in existing_blocks)
+
         addition = upd["現状_追記"]
-        new_text = f"{existing}\n\n{addition}" if existing else addition
-        new_text = new_text[:2000]
+
+        # 既存内容は絶対に保持し、末尾に追記のみ行う
+        new_text = f"{existing}\n\n{addition}" if existing.strip() else addition
 
         notion.pages.update(
             page_id=case["id"],
             properties={
-                "現状": {
-                    "rich_text": [{"type": "text", "text": {"content": new_text}}]
-                },
+                "現状": {"rich_text": _to_rich_text_blocks(new_text)},
                 "最終更新日": {"date": {"start": today}},
             },
         )
