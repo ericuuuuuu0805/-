@@ -1,0 +1,34 @@
+name: 毎週金曜日 Notion 案件進捗更新
+
+on:
+  schedule:
+    - cron: '0 1 * * 5'  # 毎週金曜日 10:00 JST (UTC+9 → UTC 01:00)
+  workflow_dispatch:      # 手動実行も可能
+
+jobs:
+  update-notion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run weekly Notion update
+        run: python scripts/update_notion_from_gmail.py
+        env:
+          ANTHROPIC_API_KEY:       ${{ secrets.ANTHROPIC_API_KEY }}
+          GMAIL_TOKEN_JSON:        ${{ secrets.GMAIL_TOKEN_JSON }}
+          GMAIL_CREDENTIALS_JSON:  ${{ secrets.GMAIL_CREDENTIALS_JSON }}
+          NOTION_TOKEN:            ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID:      ${{ secrets.NOTION_DATABASE_ID }}
+          GMAIL_USER_EMAIL:        ${{ secrets.GMAIL_USER_EMAIL }}
