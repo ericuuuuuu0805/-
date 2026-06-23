@@ -11,14 +11,21 @@ Slackの「全案件アクティビティ」チャンネルへの週次アップ
 
 ## 週次フロー
 
-### 1. 自動生成（毎週金曜 11:00 AM JST）
-GitHub Actions が自動で下書きを生成し `drafts/weekly_update_YYYY-MM-DD.md` にコミット。
+### 1. 自動実行（毎週金曜 11:00 AM JST）
+GitHub Actions が `weekly_update_claude.yml` を起動。
+Claude Code がウェブ版として自動起動し、Notion・Gmail からデータ取得 → 下書き生成 → Slack DM で通知。
 
-### 2. レビュー・承認（Claude Code）
-ユーザーが下書きを確認。「この下書きをレビューして」と言えばOK。
+### 2. レビュー・承認（Claude Code ウェブ版）
+Slack DM で「下書きができました」と届いたら、Claude Code（ウェブ版）を開いて内容を確認。
+「この下書きをレビューして」と入力すれば Claude が読み上げる。
 
 ### 3. 投稿（承認後のみ）
-ユーザーが「承認、投稿してください」と言ったら投稿する。
+「承認、投稿してください」と言ったら #all_project_activity に投稿する。
+承認なしには絶対に投稿しない。
+
+### 手動実行（いつでも）
+「今週のアップデート作って」と Claude Code に話しかけるだけで
+Notion・Gmail からデータ収集 → 下書き提示 → 承認後に投稿 の全フローが動く。
 
 ---
 
@@ -39,16 +46,27 @@ python scripts/setup_gmail_auth.py --credentials /path/to/credentials.json
 
 ## 必要な GitHub Secrets
 
-| Secret名 | 説明 |
-|----------|------|
-| `NOTION_API_KEY` | Notion Integration Token |
-| `NOTION_PROJECTS_DB_ID` | 案件進捗データベースのID |
-| `NOTION_MEETING_NOTES_DB_ID` | 議事録データベースのID |
-| `GMAIL_TOKEN_JSON` | Gmail OAuth2トークン（setup_gmail_auth.pyで生成） |
-| `ANTHROPIC_API_KEY` | Claude API Key |
-| `SLACK_BOT_TOKEN` | Slack Bot Token (`xoxb-...`) |
-| `SLACK_CHANNEL_ID` | 投稿先チャンネルID |
-| `SLACK_NOTIFY_USER_ID` | 通知先ユーザーID（DM用） |
+リポジトリの **Settings → Secrets and variables → Actions** に登録する。
+
+| Secret名 | 説明 | 取得場所 |
+|----------|------|--------|
+| `ANTHROPIC_API_KEY` | Claude API Key | console.anthropic.com |
+| `NOTION_API_KEY` | Notion Integration Token | notion.so/my-integrations |
+| `NOTION_PROJECTS_DB_ID` | 案件進捗データベースのID | NotionのURL末尾32文字 |
+| `NOTION_MEETING_NOTES_DB_ID` | 議事録データベースのID | NotionのURL末尾32文字 |
+| `GMAIL_TOKEN_JSON` | Gmail OAuth2トークン | `python scripts/setup_gmail_auth.py` で生成 |
+| `SLACK_BOT_TOKEN` | Slack Bot Token | api.slack.com/apps → Bot Token (`xoxb-...`) |
+| `SLACK_TEAM_ID` | Slack ワークスペース ID | Slack管理画面 → `T` から始まるID |
+| `SLACK_CHANNEL_ID` | 投稿先チャンネルID（#all_project_activity） | チャンネル右クリック → チャンネル詳細 |
+| `SLACK_NOTIFY_USER_ID` | 承認依頼DM送付先のユーザーID | Slackプロフィール → メンバーIDをコピー |
+
+## Slack Bot に必要な権限（OAuth Scopes）
+
+Bot Token Scopes として以下を追加する：
+- `chat:write` — メッセージ送信
+- `channels:read` — チャンネル一覧
+- `im:write` — DM 送信
+- `groups:read` — プライベートチャンネル読み取り
 
 ---
 
