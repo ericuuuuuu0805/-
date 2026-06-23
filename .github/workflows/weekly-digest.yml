@@ -1,0 +1,32 @@
+name: F2 週次ダイジェスト（月曜）
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'  # 毎週月曜 09:00 JST (UTC 00:00)
+  workflow_dispatch:
+
+jobs:
+  weekly-digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run weekly digest (F2)
+        run: python scripts/weekly_digest.py
+        env:
+          ANTHROPIC_API_KEY:      ${{ secrets.ANTHROPIC_API_KEY }}
+          NOTION_TOKEN:           ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID:     ${{ secrets.NOTION_DATABASE_ID }}
+          SLACK_WEBHOOK_DIGEST:   ${{ secrets.SLACK_WEBHOOK_DIGEST }}

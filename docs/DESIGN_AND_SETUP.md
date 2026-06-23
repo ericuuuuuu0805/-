@@ -4,12 +4,21 @@
 本書だけで「何が・どう動き・どの順で設定すれば再現できるか」が分かることを目標とする。
 
 - 対象：温泉資源庁（Le Furo）の営業案件管理を、**GitHub Actions + Python + Claude API** で半自動化する仕組み
-- 中心機能：毎週金曜、過去7日間の Gmail を読み、Notion 案件DBの「現状」を**追記専用で更新**する
-- 方針：**追記専用（既存内容は絶対に消さない）・書込直前に最新を再取得・関連がなければ触らない**
-- 関連ファイル：`.github/workflows/weekly-notion-update.yml` / `scripts/update_notion_from_gmail.py` / `scripts/setup_gmail_token.py` / `requirements.txt`
+- 設計書（Google ドキュメント版 v0.2）の **F1〜F4** を、本リポジトリにコード実装したもの。**出力先は Notion と Slack**（設計書の Drive/Gmail は使わない）。
+- 方針：**読み書き分離（書くのはF1とF4の新規ページのみ）・追記専用・迷ったら止める・曜日分散**
+- 関連ファイル：
+  - F1 案件同期：`scripts/update_notion_from_gmail.py` ＋ `.github/workflows/weekly-notion-update.yml`
+  - F2 週次ダイジェスト：`scripts/weekly_digest.py` ＋ `.github/workflows/weekly-digest.yml`
+  - F3 休眠アラート：`scripts/dormant_alert.py` ＋ `.github/workflows/dormant-alert.yml`
+  - F4 定例会資料：`scripts/meeting_doc.py` ＋ `.github/workflows/meeting-doc.yml`
+  - 共通：`scripts/common.py`（Notion取得・Slack投稿・日付）／`scripts/setup_gmail_token.py`／`requirements.txt`
 
-> 補足：本リポジトリは「MCP / Claude Code Routines 版」とは別の、コード（CI）として動く独立実装。
-> 役割としては前者の **F1（案件同期・書込）** に相当する部分を GitHub Actions で常時自動化したもの。
+| 機能 | 役割 | 起動 | 出力先 | 書込 |
+| --- | --- | --- | --- | --- |
+| F1 案件同期 | 直近7日のGmailを現状に追記 | 金 10:00 JST | Notion（現状・最終更新日） | ○（追記） |
+| F2 週次ダイジェスト | 今週の動き/停滞/期限を要約 | 月 09:00 JST | Slack #all_project_activity | × |
+| F3 休眠アラート | 30日動きのない案件を抽出 | 水 10:00 JST | Slack #sales | × |
+| F4 定例会資料 | High案件を現状/論点/次アクションに整形 | 定例前日朝（既定 木 08:00 JST・要調整） | Notion 新規ページ | ○（新規のみ） |
 
 ---
 
@@ -59,6 +68,12 @@ GitHub Actions（毎週金 or 手動）
 | `NOTION_DATABASE_ID` | 対象の案件DB | 未設定時はコード内デフォルトを使用（§8） |
 | `GMAIL_CREDENTIALS_JSON` | OAuth クライアント情報 | ワークフローに渡しているが、実行スクリプトは未使用（トークン取得時のみ必要） |
 | `GMAIL_USER_EMAIL` | 対象メールアドレス | 同上：現状スクリプトは `userId="me"` を使い未参照。将来の明示指定用に予約 |
+| `SLACK_WEBHOOK_DIGEST` | F2 の投稿先 #all_project_activity | Eric 発行の Incoming Webhook URL |
+| `SLACK_WEBHOOK_ALERT` | F3 の投稿先 #sales | 同上（チャンネルごとに別 URL） |
+| `NOTION_MEETING_PARENT_PAGE_ID` | F4 定例資料ページを作成する親ページID | インテグレーションが書込権限を持つページ |
+
+> Slack は**チャンネルごとに Incoming Webhook URL が分かれる**ため、F2 と F3 で別々の Secret を使う。
+> Webhook は Slack App の「Incoming Webhooks」を有効化し、対象チャンネルを選んで発行する。
 
 > メモ：`GMAIL_CREDENTIALS_JSON` / `GMAIL_USER_EMAIL` は現行コードでは読み取られない。
 > 登録は任意だが、ワークフロー定義に env として残っているため空でも設定しておくと警告を避けられる。
@@ -95,6 +110,23 @@ GitHub Actions（毎週金 or 手動）
    - `現状` = 既存 ＋ `\n\n` ＋ 追記。rich_text は**1999字ごとに分割**して格納（Notion 1ブロック上限対策）。
    - `最終更新日` = 当日。
 6. 更新件数をログに出して終了。
+
+## 7-2. F2〜F4 の処理フロー
+共通基盤は `scripts/common.py`（Notion 全案件取得・Slack Incoming Webhook 投稿・JST 日付）。
+案件DBのフィールド対応：設計書の「最終アクティビティ日」＝本DBの **`最終更新日`**、「活動ログ」＝ **`現状`**、「優先度=高」＝ **`High Priority`**。
+
+- **F2 週次ダイジェスト**（`weekly_digest.py`・読み取りのみ）
+  1. 全案件を取得し、`最終更新日` が直近7日以内かで「動いた／止まっている」に振り分け。
+  2. Claude（`claude-opus-4-8`）で mrkdwn の週報本文を生成（①動いた②停滞③期限/次アクション の3節、案件名はリンク付き、推測は「（AI整理）」明示）。
+  3. `SLACK_WEBHOOK_DIGEST` で #all_project_activity に投稿。
+- **F3 休眠アラート**（`dormant_alert.py`・ルールベース・Claude不使用）
+  1. 全案件を取得。`現状` に終了系キーワード（失注/入金済/完了/クローズ/終了/見送り/中止）を含む案件は除外。
+  2. `本日 − 最終更新日 > 30日` を「休眠中」、`最終更新日` 未入力を「要確認」に分類（経過日数で降順）。
+  3. 対象が無ければ投稿しない。あれば `SLACK_WEBHOOK_ALERT` で #sales に投稿。
+- **F4 定例会資料**（`meeting_doc.py`・Notion 新規ページのみ書込）
+  1. `優先度 = High Priority` の案件を抽出。
+  2. Claude で各案件を「現状（事実）／論点（AI整理）／次アクション」に整形（JSON）。
+  3. `NOTION_MEETING_PARENT_PAGE_ID` 配下に「【定例資料】High Priority案件 YYYY-MM-DD」を新規作成（100ブロック超は追記）。案件DBには書き込まない。
 
 ## 8. 環境固有値（自環境の値に差し替える）
 | 項目 | 本番(温泉資源庁)の値 | 差し替え方法 |

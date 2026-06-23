@@ -1,0 +1,33 @@
+name: F4 定例会資料（定例前日）
+
+on:
+  schedule:
+    # 既定: 木曜 08:00 JST (UTC 木 23:00 の前日=水) → 定例曜日に合わせて要調整
+    - cron: '0 23 * * 3'  # 木曜 08:00 JST
+  workflow_dispatch:
+
+jobs:
+  meeting-doc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run meeting doc (F4)
+        run: python scripts/meeting_doc.py
+        env:
+          ANTHROPIC_API_KEY:              ${{ secrets.ANTHROPIC_API_KEY }}
+          NOTION_TOKEN:                   ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID:             ${{ secrets.NOTION_DATABASE_ID }}
+          NOTION_MEETING_PARENT_PAGE_ID:  ${{ secrets.NOTION_MEETING_PARENT_PAGE_ID }}
