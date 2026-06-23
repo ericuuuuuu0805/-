@@ -1,0 +1,122 @@
+name: 週次案件アップデート（Claude Code 自動実行）
+
+on:
+  schedule:
+    # 毎週金曜日 11:00 AM JST = 02:00 UTC
+    - cron: '0 2 * * 5'
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'テスト実行（Slackに投稿せず、ログのみ出力）'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  weekly-update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Claude Code で週次アップデートを自動生成・Slack DM 送付
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+
+          # ─── MCP サーバー設定 ───────────────────────────────────────
+          mcp_config: |
+            {
+              "mcpServers": {
+                "notion": {
+                  "command": "npx",
+                  "args": ["-y", "@notionhq/notion-mcp-server"],
+                  "env": {
+                    "OPENAPI_MCP_HEADERS": "{\"Authorization\": \"Bearer ${{ secrets.NOTION_API_KEY }}\", \"Notion-Version\": \"2022-06-28\"}"
+                  }
+                },
+                "slack": {
+                  "command": "npx",
+                  "args": ["-y", "@modelcontextprotocol/server-slack"],
+                  "env": {
+                    "SLACK_BOT_TOKEN": "${{ secrets.SLACK_BOT_TOKEN }}",
+                    "SLACK_TEAM_ID": "${{ secrets.SLACK_TEAM_ID }}"
+                  }
+                },
+                "gmail": {
+                  "command": "npx",
+                  "args": ["-y", "mcp-gmail"],
+                  "env": {
+                    "GMAIL_OAUTH_CREDENTIALS": "${{ secrets.GMAIL_TOKEN_JSON }}"
+                  }
+                }
+              }
+            }
+
+          # ─── Claude へのプロンプト ────────────────────────────────────
+          prompt: |
+            あなたは毎週金曜日に自動実行される週次案件アップデートボットです。
+            今日の日付をもとに「今週（月曜日〜今日）」の案件動向をまとめ、
+            Slack の全案件アクティビティへの投稿下書きを作成してください。
+
+            ## 実行手順
+
+            ### STEP 1: Notion からデータ取得
+            - 今週更新された案件進捗（プロパー案件）データベースのページを取得
+            - 今週作成・更新された議事録（ミーティングノート）を取得
+            - 内容が詳しいページは fetch で本文を確認する
+
+            ### STEP 2: Gmail からデータ取得
+            - 今週（過去7日）の業務関連メールを取得（通知・広告・Slack認証メールは除外）
+            - 特に顧客・パートナーとのやりとりに注目する
+
+            ### STEP 3: 下書き作成
+            以下のフォーマットで Slack 投稿の下書きを作成する：
+
+            ```
+            📊 *今週の案件アップデート*（MM/DD（月）〜 MM/DD（金））
+
+            ━━━━━━━━━━━━━━━━━━━━
+            📂 *今週動きのあった案件*
+            ━━━━━━━━━━━━━━━━━━━━
+
+            【案件名】
+            • *業種/業界*:
+            • *何があったか*:
+            • *誰と*:
+            • *決定事項*:
+            • *ネクストアクション*:
+              → （誰が）（いつまでに）（何をする）
+
+            ━━━━━━━━━━━━━━━━━━━━
+            📅 *今後2週間の予定*（MM/DD 〜 MM/DD）
+            ━━━━━━━━━━━━━━━━━━━━
+
+            • MM/DD（曜）: 【案件名】内容
+
+            ━━━━━━━━━━━━━━━━━━━━
+            🔇 *今週動きなし*: 案件名A, 案件名B
+            ━━━━━━━━━━━━━━━━━━━━
+            ```
+
+            ### STEP 4: Slack DM で承認依頼を送信
+            SLACK_NOTIFY_USER_ID (${{ secrets.SLACK_NOTIFY_USER_ID }}) に以下の内容を DM する：
+
+            ```
+            📝 *週次案件アップデートの下書きができました*
+
+            承認して投稿するには Claude Code（ウェブ版）を開いて
+            「承認、投稿してください」と送信してください。
+
+            ─── 下書き ───
+            [作成した下書きの全文をここに貼り付ける]
+            ```
+
+            ### 重要ルール
+            - *承認なしに #all_project_activity チャンネルへは絶対に投稿しない*
+            - 動きがなかった案件も必ず「今週動きなし」に列挙する
+            - 情報が取得できない場合も下書きを作成して DM する（その旨を明記）
+            - テストモード (${{ inputs.test_mode }}) が true の場合は DM も送らず、ログのみ出力する
