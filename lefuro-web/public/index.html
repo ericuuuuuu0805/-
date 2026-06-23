@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>温泉資源庁 / Le Furo</title>
+  <meta name="description" content="温泉資源庁・Le Furo 公式サイト（開発中）">
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <span class="brand">温泉資源庁 <small>Le&nbsp;Furo</small></span>
+      <nav class="nav">
+        <a href="#about">概要</a>
+        <a href="#status">状態</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container">
+        <h1>温泉資源庁 / Le Furo</h1>
+        <p class="lead">オリジナル Web サイト・アプリの開発拠点。<br>この雛形を起点に実装を進めます。</p>
+        <p class="env-badge" id="env-badge">環境を確認中…</p>
+      </div>
+    </section>
+
+    <section id="about" class="section">
+      <div class="container">
+        <h2>このサイトについて</h2>
+        <p>
+          <code>www2.le-furo.com</code>（さくらインターネット）上で稼働する開発用サイトです。
+          静的ページ・PHP・MySQL を組み合わせて、オリジナルのページやアプリを実装していきます。
+        </p>
+      </div>
+    </section>
+
+    <section id="status" class="section section--alt">
+      <div class="container">
+        <h2>サーバ状態</h2>
+        <p>下のボタンで PHP / DB 接続のヘルスチェックを実行します。</p>
+        <button id="health-btn" class="btn">ヘルスチェック実行</button>
+        <pre id="health-result" class="result" hidden></pre>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <small>&copy; <span id="year"></span> 温泉資源庁 / Le Furo</small>
+    </div>
+  </footer>
+
+  <script src="/assets/app.js"></script>
+</body>
+</html>

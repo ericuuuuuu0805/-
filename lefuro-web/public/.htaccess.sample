@@ -1,0 +1,18 @@
+# .htaccess.sample — Basic 認証テンプレート（資料 6-3 準拠）
+#
+# 使い方:
+#   1. このファイルを .htaccess としてコピー
+#   2. AuthUserFile はサーバ上の「絶対パス」に書き換える
+#   3. .htpasswd をローカル生成してサーバへ配置:
+#        htpasswd -nbB admin 'パスワード' > .htpasswd
+#   4. .htaccess と .htpasswd を ~/www/www2/ に FTP 配置
+#
+# さくら(Apache) は .ht* を既定で外部非公開。テスト公開時の保護に使う。
+
+AuthType Basic
+AuthName "Le Furo (Restricted)"
+AuthUserFile /home/lod-be/www/www2/.htpasswd
+Require valid-user
+
+# --- 任意: 末尾スラッシュやエラーページなどの調整はここに追記 ---
+# ErrorDocument 404 /404.html

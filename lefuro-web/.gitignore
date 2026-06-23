@@ -1,0 +1,16 @@
+# --- 認証情報・秘密（絶対にコミットしない）---
+public/config.php
+deploy/.env
+**/.htpasswd
+*.local
+
+# --- 接続情報リファレンス（平文パスワードを含む。Git管理禁止）---
+*接続情報*.md
+*アクセス情報*.md
+
+# --- OS / エディタ ---
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
