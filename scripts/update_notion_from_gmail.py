@@ -125,7 +125,7 @@ def fetch_notion_cases(notion: NotionClient, database_id: str) -> list[dict]:
                     "id": page["id"],
                     "url": page["url"],
                     "案件名": _rich_text(props, "案件名"),
-                    "企業名": _rich_text(props, "企業名"),
+                    "企業名": _select(props, "企業名"),
                     "カテゴリー": _multi_select(props, "カテゴリー"),
                     "優先度": _select(props, "優先度"),
                     "現状": _rich_text(props, "現状"),
