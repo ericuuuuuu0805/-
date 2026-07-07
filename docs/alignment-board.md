@@ -11,9 +11,14 @@ Notion「🧭 全社目合わせボード」 ←── 全員がリアルタイ�
  ├── 🏢 体制マップ          … 現行組織＋立ち上げ中・構想段階の新体制
  └── ✅ 目合わせログ        … 会議で決まったことの記録（背景つき）
         ▲
-        │ 毎週月曜 9:00 JST（GitHub Actions）
+        │ 毎週月曜 9:00 JST（GitHub Actions・2段階実行）
         │
- scripts/alignment_digest.py
+ [1] scripts/extract_from_slack.py
+   Slack #general_全社連絡 の過去7日間の投稿・スレッドを読み取り、
+   Claude が「会社としての課題」「決定事項」を抽出して
+   課題マップ・目合わせログに自動登録（既存項目との重複は除外）
+        │
+ [2] scripts/alignment_digest.py
    1. 3つのDBを読み取り、目合わせ待ち／高優先度／停滞課題／共有待ち決定を集計
    2. Claude が全社向け30秒サマリーを生成
    3. ボードの「📬 週次目合わせダイジェスト」セクションを更新
@@ -57,11 +62,32 @@ URL: https://app.notion.com/p/396ac6d8acb4811f8c09db8201519986
 | Secret | 必須 | 用途 |
 |---|---|---|
 | `NOTION_TOKEN` | ✅ | Notion Integration トークン（既存の週次案件更新と共用） |
-| `ANTHROPIC_API_KEY` | ✅ | Claude によるサマリー生成 |
+| `ANTHROPIC_API_KEY` | ✅ | Claude によるサマリー生成・Slack 抽出 |
+| `SLACK_BOT_TOKEN` | 任意 | Slack からの課題・決定事項抽出（未設定時はスキップ） |
 | `SLACK_WEBHOOK_URL` | 任意 | 設定すると Slack にもダイジェストを投稿 |
 
 ※ Notion Integration に「全社目合わせボード」ページへのアクセス権を付与すること
 （ページ右上「…」→ 接続 → Integration を追加）。
+
+### Slack 抽出のセットアップ
+
+1. Slack App を作成し Bot Token Scopes に
+   `channels:history` `channels:read` `users:read` を付与
+   （プライベートチャンネルを対象にする場合は `groups:history` `groups:read` も）
+2. Bot を対象チャンネル（`#general_全社連絡` など）に招待する（`/invite @ボット名`）
+3. Bot User OAuth Token（`xoxb-...`）を GitHub Secret `SLACK_BOT_TOKEN` に登録
+
+- 対象チャンネルは環境変数 `SLACK_CHANNEL_IDS`（カンマ区切りのチャンネルID）で変更可。
+  デフォルトは `C09HS0GF0SY`（#general_全社連絡）
+- 抽出対象期間は `ALIGNMENT_SLACK_LOOKBACK_DAYS`（デフォルト7日）で変更可
+
+### Slack 抽出の挙動
+
+- 経営陣が「認識合わせしたい」と投げかけた論点 → ステータス **目合わせ待ち** で課題登録
+- その他の未解決事項 → **未着手** で課題登録
+- 全社連絡で報告された決定 → 目合わせログに **全社共有済み** で登録
+- 個人タスク・雑談・単なる告知は抽出しない。既存項目と重複するものも登録しない
+- 抽出された項目には `【Slack #チャンネル名 より自動抽出 / 出典: 投稿者 日付】` が付く
 
 ## 手動実行
 
