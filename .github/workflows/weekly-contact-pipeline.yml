@@ -1,0 +1,41 @@
+name: 毎週金曜日 人脈マップ同期＆協業提案レポート
+
+on:
+  schedule:
+    - cron: '30 1 * * 5'  # 毎週金曜日 10:30 JST (UTC+9 → UTC 01:30)
+  workflow_dispatch:      # 手動実行も可能
+
+jobs:
+  contact-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Slack人脈メモ → コンタクトDB 同期
+        run: python scripts/sync_contacts_from_slack.py
+        env:
+          ANTHROPIC_API_KEY:        ${{ secrets.ANTHROPIC_API_KEY }}
+          NOTION_TOKEN:             ${{ secrets.NOTION_TOKEN }}
+          SLACK_BOT_TOKEN:          ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CONTACT_CHANNEL_ID: ${{ secrets.SLACK_CONTACT_CHANNEL_ID }}
+
+      - name: 人脈マップ＆協業提案レポート生成
+        if: always()  # 同期が失敗してもレポートは生成する
+        run: python scripts/weekly_collab_report.py
+        env:
+          ANTHROPIC_API_KEY:       ${{ secrets.ANTHROPIC_API_KEY }}
+          NOTION_TOKEN:            ${{ secrets.NOTION_TOKEN }}
+          SLACK_BOT_TOKEN:         ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_REPORT_CHANNEL_ID: ${{ secrets.SLACK_REPORT_CHANNEL_ID }}
